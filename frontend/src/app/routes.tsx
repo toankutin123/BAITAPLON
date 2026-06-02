@@ -7,8 +7,13 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { Root } from "./pages/Root";
+import { PropertyDetailPage } from "./pages/PropertyDetailPage";
 import { AddPropertyPage } from "./pages/AddPropertyPage";
 import { PropertiesPage } from "./pages/PropertiesPage";
+import { BecomeSellerPage } from "./pages/BecomeSellerPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { ChatWithAdminPage } from "./pages/ChatWithAdminPage";
 
 export const router = createBrowserRouter([
   {
@@ -23,8 +28,13 @@ export const router = createBrowserRouter([
       { path: "register", Component: RegisterPage },
       { path: "properties", Component: PropertiesPage },
       { path: "add-property", Component: AddPropertyPage },
+      { path: "become-seller", Component: BecomeSellerPage },
       { path: "*", Component: HomePage },
-      { path: "profile", Component: ProfilePage }
+      { path: "properties/:id", Component: PropertyDetailPage },
+      { path: "profile", Component: ProfilePage },
+      { path: "forgot-password", Component: ForgotPasswordPage },
+      { path: "reset-password", Component: ResetPasswordPage },
+      { path: "chat-with-admin", Component: ChatWithAdminPage }
     ],
   },
 ]);

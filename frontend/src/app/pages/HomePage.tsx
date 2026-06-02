@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { TrendingUp, Brain, MapPin, LineChart, ArrowRight, Sparkles, User, LogOut, ChevronDown, Shield } from "lucide-react";
+import { TrendingUp, Brain, MapPin, LineChart, ArrowRight, Sparkles, User, LogOut, ChevronDown, Shield, MessageCircle } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Checkbox } from "../components/ui/checkbox";
@@ -35,8 +35,8 @@ export function HomePage() {
             <Link to="/properties" className="text-sm text-foreground/80 hover:text-foreground transition-colors">
               Chợ Đất
             </Link>
-            <Link to="#pricing" className="text-sm text-foreground/80 hover:text-foreground transition-colors">
-              Bảng Giá
+            <Link to="/market-analysis" className="text-sm text-foreground/80 hover:text-foreground transition-colors">
+              Phân Tích Thị Trường
             </Link>
             {!isAuthenticated && (
               <Link to="/login" className="text-sm text-foreground/80 hover:text-foreground transition-colors">
@@ -66,6 +66,10 @@ export function HomePage() {
                 <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/profile")}>
                   <User className="w-4 h-4 mr-2" />
                   Thông tin cá nhân
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/chat-with-admin")}>
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Chat với Admin
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer" onClick={handleLogout}>
