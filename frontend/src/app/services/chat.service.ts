@@ -1,6 +1,8 @@
 import { authService } from "./auth.service";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8001";
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? "";
+
+
 
 export interface ChatMessage {
   id: number;

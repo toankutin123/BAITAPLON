@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:8001/api";
+const API_URL = `${(import.meta as any).env?.VITE_API_URL ?? ""}/api`;
+
+
 const MARKET_URL = `${API_URL}/market`;
 const DASHBOARD_URL = `${API_URL}/dashboard`;
 const VALUATION_URL = `${API_URL}/valuation`;

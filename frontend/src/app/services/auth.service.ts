@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:8001/api/auth";
+const API_URL = `${(import.meta as any).env?.VITE_API_URL ?? ""}/api/auth`;
+
+
 
 export interface RegisterData {
   username: string;
