@@ -29,10 +29,50 @@ def _get_city_average_price(city: str) -> float:
     Get average price per m2 for a city from average.json.
     Returns price in VND (not millions).
     """
+    prices = _get_all_city_prices(city)
+    return _median(prices) if prices else None
+
+
+def _get_all_city_prices(city: str) -> List[float]:
+    """
+    Get ALL district prices per m2 for a city from average.json.
+    Returns list of prices in VND (not millions).
+    """
     import json
     from pathlib import Path
 
     if not city:
+        return []
+
+    try:
+        data_path = Path(__file__).resolve().parent.parent / "bds_tool" / "average.json"
+        with open(data_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            records = data.get("result", [])
+
+            city_prices = []
+            for record in records:
+                if record.get("province", "").lower() == city.lower():
+                    price = record.get("avg_price_per_m2", 0)
+                    if price > 0:
+                        city_prices.append(price * 1_000_000)  # Convert triệu to VND
+
+            return city_prices
+    except Exception as e:
+        print(f"[AI] Could not load average.json: {e}")
+
+    return []
+
+
+def _get_district_price(city: str, district: str) -> float:
+    """
+    Get price for a specific district from average.json.
+    Returns price in VND or None if not found.
+    """
+    import json
+    from pathlib import Path
+
+    if not city or not district:
         return None
 
     try:
@@ -41,16 +81,16 @@ def _get_city_average_price(city: str) -> float:
             data = json.load(f)
             records = data.get("result", [])
 
-            # Filter by city (province field)
-            city_prices = []
-            for record in records:
-                if record.get("province", "").lower() == city.lower():
-                    price = record.get("avg_price_per_m2", 0)
-                    if price > 0:
-                        city_prices.append(price * 1_000_000)  # Convert triệu to VND
+            district_lower = district.lower().replace('quận ', '').replace('quận', '').strip()
+            province_lower = city.lower()
 
-            if city_prices:
-                return _median(city_prices)
+            for record in records:
+                if record.get("province", "").lower() == province_lower:
+                    zone = record.get("zone", "").lower().replace('quận ', '').replace('quận', '').strip()
+                    if zone == district_lower or district_lower in zone:
+                        price = record.get("avg_price_per_m2", 0)
+                        if price > 0:
+                            return price * 1_000_000
     except Exception as e:
         print(f"[AI] Could not load average.json: {e}")
 
@@ -106,23 +146,47 @@ def generate_fallback_insights(records: List[Dict[str, float]]) -> str:
 
     province_avgs.sort(key=lambda x: x[1], reverse=True)
 
+    # City name mapping for display
+    city_names = {
+        'hanoi': 'Hà Nội', 'hcm': 'TP.HCM', 'danang': 'Đà Nẵng',
+        'binhduong': 'Bình Dương', 'dongnai': 'Đồng Nai', 'cantho': 'Cần Thơ'
+    }
+
     lines = [
-        f"📊 Phân tích thị trường BĐS:",
+        "📊 Phân tích thị trường BĐS:",
         f"- Giá trung bình: {avg_price:.1f} triệu/m²",
-        f"- Giá cao nhất: {max_price:.1f} triệu/m² ({max_record.get('province', '')})",
-        f"- Giá thấp nhất: {min_price:.1f} triệu/m² ({min_record.get('province', '')})",
+        f"- Giá cao nhất: {max_price:.1f} triệu/m² ({max_record.get('zone', '')}, {city_names.get(max_record.get('province', ''), max_record.get('province', ''))})",
+        f"- Giá thấp nhất: {min_price:.1f} triệu/m² ({min_record.get('zone', '')}, {city_names.get(min_record.get('province', ''), min_record.get('province', ''))})",
         "",
-        "📈 Xu hướng theo tỉnh/thành:",
+        "📈 Xu hướng theo khu vực:",
     ]
 
     for province, avg in province_avgs[:5]:
+        city_display = city_names.get(province, province.upper())
         trend = "↑" if avg > avg_price else "↓"
-        lines.append(f"  {trend} {province}: {avg:.1f} triệu/m²")
+        lines.append(f"  {trend} {city_display}: {avg:.1f} triệu/m²")
+
+    # Find best and worst districts
+    all_zones = [(r.get('zone', ''), r.get('province', ''), r.get('avg_price_per_m2', 0)) for r in records]
+    all_zones.sort(key=lambda x: x[2], reverse=True)
+
+    if len(all_zones) >= 3:
+        lines.append("")
+        lines.append("🏆 Top khu vực đắt nhất:")
+        for i, (zone, province, price) in enumerate(all_zones[:3], 1):
+            city_display = city_names.get(province, province.upper())
+            lines.append(f"  {i}. {zone}, {city_display}: {price:.1f} triệu/m²")
+
+        lines.append("")
+        lines.append("📉 Top khu vực rẻ nhất:")
+        for i, (zone, province, price) in enumerate(reversed(all_zones[-3:]), 1):
+            city_display = city_names.get(province, province.upper())
+            lines.append(f"  {i}. {zone}, {city_display}: {price:.1f} triệu/m²")
 
     lines.extend([
         "",
         "💡 Nhận định:",
-        f"- Thị trường {'đang tăng' if avg_price > 50000000 else 'ổn định'} nhìn chung",
+        f"- Thị trường {'tăng' if avg_price > 80 else 'ổn định'} nhìn chung",
         f"- Có {len(records)} khu vực dữ liệu để so sánh"
     ])
 
@@ -319,12 +383,19 @@ def predict_property_price(location: str, property_type: str, area: float, bedro
     # 2. Fallback to average.json if scrape has no/too few data
     if source_count < 3:
         print(f"[AI] Dữ liệu scrape không đủ ({source_count}), thử average.json...")
+        if clean_district:
+            # Try district-level price first
+            district_price = _get_district_price(clean_city, clean_district)
+            if district_price:
+                all_prices_per_m2.append(district_price)
+                print(f"[AI] Thêm giá district từ average.json cho {clean_district}: {district_price/1e6:.1f} triệu/m²")
         if clean_city:
-            city_price = _get_city_average_price(clean_city)
-            if city_price:
+            # Add ALL district prices from the city for better statistical coverage
+            city_prices = _get_all_city_prices(clean_city)
+            for city_price in city_prices:
                 all_prices_per_m2.append(city_price)
-                source_count = len(all_prices_per_m2)
-                print(f"[AI] Thêm giá từ average.json cho {clean_city}: {city_price/1e6:.1f} triệu/m²")
+            if city_prices:
+                print(f"[AI] Thêm {len(city_prices)} giá từ average.json cho {clean_city}")
 
     # 3. Fallback to database LAST (test DB có thể có dữ liệu không chính xác)
     if source_count < 3:
@@ -448,13 +519,22 @@ def predict_property_price(location: str, property_type: str, area: float, bedro
 
     # Fallback to median calculation if AI didn't work
     if predicted_price is None:
+        used_fallback_data = False
         if source_count == 0:
-            # Try to get price from average.json based on city
-            city_price = _get_city_average_price(clean_city)
-            if city_price:
-                median_price_per_m2 = city_price
-                print(f"[AI] Không có dữ liệu local, sử dụng giá TB từ average.json: {city_price/1e6:.1f} triệu/m² cho {clean_city}")
-            else:
+            # Try district-level price first, then city-level
+            if clean_district:
+                district_price = _get_district_price(clean_city, clean_district)
+                if district_price:
+                    median_price_per_m2 = district_price
+                    print(f"[AI] Sử dụng giá district từ average.json: {district_price/1e6:.1f} triệu/m² cho {clean_district}")
+                    used_fallback_data = True
+            if not used_fallback_data and clean_city:
+                city_prices = _get_all_city_prices(clean_city)
+                if city_prices:
+                    median_price_per_m2 = _median(city_prices)
+                    print(f"[AI] Sử dụng giá TB từ average.json: {median_price_per_m2/1e6:.1f} triệu/m² cho {clean_city}")
+                    used_fallback_data = True
+            if not used_fallback_data:
                 median_price_per_m2 = SAFE_BASE_PRICE_PER_M2
                 print("[AI] Không có dữ liệu, sử dụng giá mặc định an toàn")
         else:
@@ -473,14 +553,20 @@ def predict_property_price(location: str, property_type: str, area: float, bedro
         insights.append(f"Giá thị trường: {_median(all_prices_per_m2)/1000000:.1f} triệu/m²")
         insights.append(f"Dự đoán cho {area}m²: {predicted_price/1000000000:.2f} tỷ VNĐ")
     else:
-        # Get city price for display
-        city_price = _get_city_average_price(clean_city)
-        if city_price:
-            insights.append(f"⚠️ Không tìm thấy dữ liệu local tại '{location}'.")
-            insights.append(f"Sử dụng giá thị trường {clean_city}: {city_price/1000000:.1f} triệu/m² (theo dữ liệu thị trường)")
+        # Check district price first for better messaging
+        district_price = _get_district_price(clean_city, clean_district) if clean_district else None
+        city_price = _get_city_average_price(clean_city) if clean_city else None
+
+        if district_price:
+            insights.append(f"Không tìm thấy dữ liệu local tại '{location}'.")
+            insights.append(f"Sử dụng giá quận {clean_district}: {district_price/1000000:.1f} triệu/m² (dữ liệu thị trường)")
+            insights.append(f"Dự đoán cho {area}m²: {predicted_price/1000000000:.2f} tỷ VNĐ")
+        elif city_price:
+            insights.append(f"Không tìm thấy dữ liệu local tại '{location}'.")
+            insights.append(f"Sử dụng giá thị trường {clean_city}: {city_price/1000000:.1f} triệu/m² (dữ liệu thị trường)")
             insights.append(f"Dự đoán cho {area}m²: {predicted_price/1000000000:.2f} tỷ VNĐ")
         else:
-            insights.append("⚠️ Không tìm thấy dữ liệu trong khu vực.")
+            insights.append("Không tìm thấy dữ liệu trong khu vực.")
             insights.append(f"Sử dụng giá ước tính: {SAFE_BASE_PRICE_PER_M2/1000000:.1f} triệu/m²")
             insights.append(f"Dự đoán cho {area}m²: {predicted_price/1000000000:.2f} tỷ VNĐ")
 
