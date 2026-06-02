@@ -138,7 +138,7 @@ export function RegisterPage() {
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
+          <CardFooter className="flex flex-col items-stretch space-y-4 pt-6">
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Đang đăng ký..." : "Đăng ký"}
             </Button>

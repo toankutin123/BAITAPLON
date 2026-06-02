@@ -1,28 +1,16 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
 import { Alert, AlertDescription } from "../components/ui/alert";
 
-export function LoginPage() {
+export function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const from = (location.state as any)?.from?.pathname || "/";
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate(from, { replace: true });
-    }
-  }, [isAuthenticated, navigate, from]);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,10 +18,20 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate(from, { replace: true });
+      const response = await fetch("http://localhost:8001/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || "Có lỗi xảy ra");
+      }
+
+      setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng nhập thất bại");
+      setError(err instanceof Error ? err.message : "Có lỗi xảy ra");
     } finally {
       setLoading(false);
     }
@@ -43,9 +41,9 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Đăng nhập</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">Quên mật khẩu</CardTitle>
           <CardDescription className="text-center">
-            Nhập email và mật khẩu để đăng nhập
+            Nhập email để nhận link đặt lại mật khẩu
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -53,6 +51,13 @@ export function LoginPage() {
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            {success && (
+              <Alert className="bg-green-50 text-green-800 border-green-200">
+                <AlertDescription>
+                  Nếu email tồn tại trong hệ thống, link đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra hộp thư.
+                </AlertDescription>
               </Alert>
             )}
             <div className="space-y-2">
@@ -64,35 +69,18 @@ export function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Mật khẩu</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
+                disabled={loading || success}
               />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col items-stretch space-y-4 pt-6">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            <Button type="submit" className="w-full" disabled={loading || success}>
+              {loading ? "Đang gửi..." : success ? "Đã gửi thành công" : "Gửi link đặt lại mật khẩu"}
             </Button>
             <p className="text-sm text-center text-gray-600">
-              Chưa có tài khoản?{" "}
-              <Link to="/register" className="text-blue-600 hover:underline font-medium">
-                Đăng ký ngay
-              </Link>
-            </p>
-            <p className="text-sm text-center text-gray-600">
-              <Link to="/forgot-password" className="text-blue-600 hover:underline font-medium">
-                Quên mật khẩu?
+              Nhớ mật khẩu?{" "}
+              <Link to="/login" className="text-blue-600 hover:underline font-medium">
+                Đăng nhập ngay
               </Link>
             </p>
           </CardFooter>
