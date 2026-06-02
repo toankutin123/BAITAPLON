@@ -35,6 +35,7 @@ services:
       DB_PASSWORD: 123456
       DB_NAME: real_estate_ai
       JWT_SECRET: your_jwt_secret_key_change_this_in_production
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
       CLAUDE_API_URL: https://api.anthropic.com/v1/complete
     ports:
@@ -45,6 +46,7 @@ services:
     volumes:
       - ./backend_py:/app
       - ./bds_tool:/app/bds_tool
+    command: sh -c "python scripts/init_db.py && python main.py"
 
   # Frontend (React)
   frontend:
@@ -54,7 +56,7 @@ services:
     container_name: baitaplon-frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:8001
+      VITE_API_URL: http://backend:8001
     ports:
       - "5173:5173"
     depends_on:

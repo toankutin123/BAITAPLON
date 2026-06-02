@@ -14,5 +14,5 @@ COPY . .
 # Expose port
 EXPOSE 8001
 
-# Run server
+# Run server (command overridden by docker-compose)
 CMD ["python", "main.py"]
