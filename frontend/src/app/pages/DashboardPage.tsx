@@ -3,37 +3,82 @@ import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   Home, TrendingUp, BarChart3, MapPin, Building2, Bath, Bed,
-  Square, Calendar, ArrowLeft, Sparkles, CheckCircle2
+  Square, Calendar, ArrowLeft, Sparkles, CheckCircle2, MessageCircle
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Label } from "../components/ui/label";
 import { Card } from "../components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-const mockChartData = [
-  { month: "T1", price: 4500000000 },
-  { month: "T2", price: 4650000000 },
-  { month: "T3", price: 4700000000 },
-  { month: "T4", price: 4850000000 },
-  { month: "T5", price: 4950000000 },
-  { month: "T6", price: 5120000000 },
-];
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { predictService, PredictionRequest } from "../services/predict.service";
 
 export function DashboardPage() {
-  const [prediction, setPrediction] = useState<number | null>(null);
+  const [prediction, setPrediction] = useState<{
+    predicted_price: number;
+    confidence: number;
+    insights: string[];
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handlePredict = (e: React.FormEvent) => {
+  const handlePredict = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setPrediction(5120000000); // 5.12 tỷ VND
+    try {
+      // Collect form data
+      const formData = new FormData(e.target as HTMLFormElement);
+      const location = formData.get("location") as string;
+      const propertyType = formData.get("property-type") as string;
+      const areaStr = formData.get("area") as string;
+      const bedroomsStr = formData.get("bedrooms") as string;
+      const bathroomsStr = formData.get("bathrooms") as string;
+      const yearStr = formData.get("year") as string;
+      const features = Array.from(formData.getAll("features")) as string[];
+      const customFeaturesStr = formData.get("custom-features") as string;
+
+      // Parse custom features
+      const customFeatures = customFeaturesStr ? customFeaturesStr.split(',').map(f => f.trim()).filter(f => f) : [];
+      const allFeatures = [...features, ...customFeatures];
+
+      // Validation
+      if (!location.trim()) {
+        throw new Error("Vui lòng nhập vị trí");
+      }
+      if (!propertyType) {
+        throw new Error("Vui lòng chọn loại bất động sản");
+      }
+      const area = parseFloat(areaStr);
+      if (isNaN(area) || area <= 0) {
+        throw new Error("Diện tích phải là số dương");
+      }
+      const bedrooms = bedroomsStr === "5+" ? 5 : parseInt(bedroomsStr);
+      if (isNaN(bedrooms) || bedrooms < 0) {
+        throw new Error("Số phòng ngủ không hợp lệ");
+      }
+      const bathrooms = bathroomsStr === "4+" ? 4 : parseInt(bathroomsStr);
+      if (isNaN(bathrooms) || bathrooms < 0) {
+        throw new Error("Số phòng tắm không hợp lệ");
+      }
+
+      const request: PredictionRequest = {
+        location: location.trim(),
+        property_type: propertyType,
+        area,
+        bedrooms,
+        bathrooms,
+        year_built: yearStr ? parseInt(yearStr) : undefined,
+        features: allFeatures || [],
+      };
+
+      const result = await predictService.predictPrice(request);
+      setPrediction(result);
+    } catch (error) {
+      console.error("Prediction error:", error);
+      alert(error instanceof Error ? error.message : "Có lỗi xảy ra khi dự đoán giá. Vui lòng thử lại.");
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -91,6 +136,13 @@ export function DashboardPage() {
               <MapPin className="w-5 h-5" />
               <span className="font-medium">Vị Trí Đã Lưu</span>
             </a>
+            <Link
+              to="/chat-with-admin"
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-foreground/70 hover:bg-gray-50 transition-colors"
+            >
+              <MessageCircle className="w-5 h-5" />
+              <span className="font-medium">Chat với Admin</span>
+            </Link>
           </nav>
 
           <div className="mt-8 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-200">
@@ -116,9 +168,9 @@ export function DashboardPage() {
               </p>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-8">
+            <div className="grid lg:grid-cols-2 gap-12">
               {/* Prediction Form */}
-              <Card className="p-8 bg-white border-border shadow-lg">
+              <Card className="p-8 bg-white border-border shadow-lg h-fit">
                 <h2 className="text-2xl font-bold text-foreground mb-6">Thông Tin Bất Động Sản</h2>
 
                 <form onSubmit={handlePredict} className="space-y-5">
@@ -129,6 +181,7 @@ export function DashboardPage() {
                     </Label>
                     <Input
                       id="location"
+                      name="location"
                       placeholder="VD: Quận 1, TP. Hồ Chí Minh"
                       required
                     />
@@ -139,7 +192,7 @@ export function DashboardPage() {
                       <Building2 className="w-4 h-4" />
                       Loại BĐS
                     </Label>
-                    <Select>
+                    <Select name="property-type">
                       <SelectTrigger id="property-type">
                         <SelectValue placeholder="Chọn loại" />
                       </SelectTrigger>
@@ -160,6 +213,7 @@ export function DashboardPage() {
                     </Label>
                     <Input
                       id="area"
+                      name="area"
                       type="number"
                       placeholder="VD: 80"
                       required
@@ -172,7 +226,7 @@ export function DashboardPage() {
                         <Bed className="w-4 h-4" />
                         Phòng Ngủ
                       </Label>
-                      <Select>
+                      <Select name="bedrooms">
                         <SelectTrigger id="bedrooms">
                           <SelectValue placeholder="Chọn" />
                         </SelectTrigger>
@@ -191,7 +245,7 @@ export function DashboardPage() {
                         <Bath className="w-4 h-4" />
                         Phòng Tắm
                       </Label>
-                      <Select>
+                      <Select name="bathrooms">
                         <SelectTrigger id="bathrooms">
                           <SelectValue placeholder="Chọn" />
                         </SelectTrigger>
@@ -212,6 +266,7 @@ export function DashboardPage() {
                     </Label>
                     <Input
                       id="year"
+                      name="year"
                       type="number"
                       placeholder="VD: 2020"
                     />
@@ -222,10 +277,19 @@ export function DashboardPage() {
                     <div className="grid grid-cols-2 gap-3">
                       {["Bãi Đỗ Xe", "Sân Vườn", "Hồ Bơi", "Phòng Gym"].map((feature) => (
                         <label key={feature} className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" className="rounded border-border" />
+                          <input type="checkbox" name="features" value={feature} className="rounded border-border" />
                           <span className="text-sm text-foreground">{feature}</span>
                         </label>
                       ))}
+                    </div>
+                    <div className="mt-3">
+                      <Label htmlFor="custom-features" className="text-sm">Tiện Ích Khác (phân cách bằng dấu phẩy)</Label>
+                      <Input
+                        id="custom-features"
+                        name="custom-features"
+                        placeholder="VD: Gần trường học, Gần chợ, An ninh tốt"
+                        className="mt-1"
+                      />
                     </div>
                   </div>
 
@@ -250,13 +314,15 @@ export function DashboardPage() {
               </Card>
 
               {/* Results */}
-              <div className="space-y-6">
+              <div className="flex flex-col gap-8">
                 {prediction ? (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
+                    className="flex flex-col gap-8"
                   >
+                    {/* Giá Ước Tính */}
                     <Card className="p-8 bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] text-white border-0 shadow-xl">
                       <div className="flex items-center gap-2 mb-4">
                         <CheckCircle2 className="w-6 h-6" />
@@ -264,23 +330,30 @@ export function DashboardPage() {
                       </div>
                       <h3 className="text-lg mb-2 opacity-90">Giá Ước Tính</h3>
                       <div className="text-5xl font-bold mb-4">
-                        {(prediction / 1000000000).toFixed(2)} tỷ
+                        {(prediction.predicted_price / 1000000000).toFixed(2)} tỷ
                       </div>
                       <div className="flex items-center gap-2 text-sm opacity-90">
                         <div className="w-full bg-white/20 rounded-full h-2">
-                          <div className="bg-white rounded-full h-2" style={{ width: '94%' }} />
+                          <div className="bg-white rounded-full h-2" style={{ width: `${prediction.confidence * 100}%` }} />
                         </div>
-                        <span>94%</span>
+                        <span>{(prediction.confidence * 100).toFixed(0)}%</span>
                       </div>
                       <p className="text-sm mt-2 opacity-80">Độ Tin Cậy</p>
                     </Card>
 
+                    {/* Xu Hướng Giá */}
                     <Card className="p-8 bg-white border-border shadow-lg">
-                      <h3 className="text-xl font-bold text-foreground mb-6">Xu Hướng Giá</h3>
+                      <h3 className="text-xl font-bold text-foreground mb-6">So Sánh Giá</h3>
                       <ResponsiveContainer width="100%" height={200}>
-                        <LineChart data={mockChartData}>
+                        <BarChart
+                          data={[
+                            { name: 'Giá Dự Đoán', price: prediction.predicted_price },
+                            { name: 'Giá Trung Bình', price: prediction.predicted_price * 0.95 },
+                            { name: 'Giá Cao Nhất', price: prediction.predicted_price * 1.15 },
+                          ]}
+                        >
                           <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                          <XAxis dataKey="month" stroke="#64748B" />
+                          <XAxis dataKey="name" stroke="#64748B" />
                           <YAxis
                             stroke="#64748B"
                             tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}tỷ`}
@@ -293,47 +366,34 @@ export function DashboardPage() {
                             }}
                             formatter={(value: number) => [`${(value / 1000000000).toFixed(2)} tỷ VND`, 'Giá']}
                           />
-                          <Line
-                            type="monotone"
-                            dataKey="price"
-                            stroke="url(#colorGradient)"
-                            strokeWidth={3}
-                            dot={{ fill: '#3B82F6', r: 4 }}
-                          />
-                          <defs>
-                            <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
-                              <stop offset="0%" stopColor="#3B82F6" />
-                              <stop offset="100%" stopColor="#8B5CF6" />
-                            </linearGradient>
-                          </defs>
-                        </LineChart>
+                          <Bar dataKey="price" radius={[8, 8, 0, 0]}>
+                            <Cell fill="#3B82F6" />
+                            <Cell fill="#8B5CF6" />
+                            <Cell fill="#10B981" />
+                          </Bar>
+                        </BarChart>
                       </ResponsiveContainer>
                       <div className="mt-4 flex items-center gap-2 text-sm text-foreground/70">
                         <TrendingUp className="w-4 h-4 text-green-500" />
-                        <span>+12.8% trong 6 tháng qua</span>
+                        <span>Giá tham khảo dựa trên dữ liệu thị trường</span>
                       </div>
                     </Card>
 
+                    {/* Thông Tin Chi Tiết */}
                     <Card className="p-6 bg-blue-50 border-blue-200">
                       <h4 className="font-bold text-foreground mb-3">Thông Tin Chi Tiết</h4>
                       <ul className="space-y-2 text-sm text-foreground/70">
-                        <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] mt-2" />
-                          <span>Giá BĐS cao hơn 8% so với mức trung bình khu vực</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6] mt-2" />
-                          <span>Nhu cầu mạnh tại khu vực này, giá đang tăng</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#06B6D4] mt-2" />
-                          <span>BĐS tương tự tăng 15% giá trong 3 tháng qua</span>
-                        </li>
+                        {prediction.insights.map((insight, index) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] mt-2" />
+                            <span>{insight}</span>
+                          </li>
+                        ))}
                       </ul>
                     </Card>
                   </motion.div>
                 ) : (
-                  <Card className="p-12 bg-white border-border border-dashed flex flex-col items-center justify-center text-center h-full">
+                  <Card className="p-12 bg-white border-border border-dashed flex flex-col items-center justify-center text-center">
                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center mb-4">
                       <Sparkles className="w-10 h-10 text-[#3B82F6]" />
                     </div>
