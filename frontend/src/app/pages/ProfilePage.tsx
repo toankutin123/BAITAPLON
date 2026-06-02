@@ -1,6 +1,6 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"; 
-import { useNavigate } from "react-router-dom"; 
+import { useState, useEffect } from "react"
+import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   TrendingUp, User, MapPin, Phone, Mail, Lock, Camera, Save,
@@ -17,37 +17,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Separator } from "../components/ui/separator";
 import { Switch } from "../components/ui/switch";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
+import { ROLES, getRoleName } from "../constants/roles";
+import { PropertyManagementTab } from "../components/PropertyManagementTab";
+import { userService } from "../services/user.service";
+import { propertyService, Property } from "../services/property.service";
 
 export function ProfilePage() {
+  const { user, updateUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
 
-  // User Data State
+  // User Data State - initialized from AuthContext user
   const [userData, setUserData] = useState({
-    // Basic Info
-    fullName: "Nguyễn Văn A",
-    email: "nguyenvana@example.com",
-    phone: "0901234567",
-    dateOfBirth: "1990-01-15",
+    full_name: user?.full_name || "",
+    email: user?.email || "",
+    phone: "",
+    dateOfBirth: "",
     gender: "male",
-
-    // Address
     province: "hcm",
-    district: "q1",
-    ward: "Phường Bến Nghé",
-    streetAddress: "123 Đường Nguyễn Huệ",
-
-    // Contact Info
-    contactName: "Nguyễn Văn A",
-    contactPhone: "0901234567",
-    contactEmail: "nguyenvana@example.com",
-    zalo: "0901234567",
+    district: "",
+    ward: "",
+    streetAddress: "",
+    zalo: "",
     facebook: "",
-
-    // Account Info
-    accountType: "personal", // personal, agent, company
-    memberSince: "2024-01-15",
-    verified: true,
+    accountType: "personal",
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -63,6 +57,39 @@ export function ProfilePage() {
     marketingEmails: false,
   });
 
+  // Saved properties state
+  const [savedProperties, setSavedProperties] = useState<Property[]>([]);
+  const [savedLoading, setSavedLoading] = useState(true);
+
+  // Load saved properties
+  useEffect(() => {
+    loadSavedProperties();
+  }, []);
+
+  const loadSavedProperties = async () => {
+    try {
+      setSavedLoading(true);
+      const data = await propertyService.getSavedProperties();
+      setSavedProperties(data);
+    } catch (error) {
+      console.error("Error loading saved properties:", error);
+    } finally {
+      setSavedLoading(false);
+    }
+  };
+
+  const handleRemoveSaved = async (propertyId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await propertyService.removeSavedProperty(propertyId);
+      toast.success("Đã xóa khỏi danh sách đã lưu");
+      loadSavedProperties();
+    } catch (error) {
+      toast.error("Lỗi khi xóa BĐS đã lưu");
+    }
+  };
+
   const updateUserData = (field: string, value: any) => {
     setUserData(prev => ({ ...prev, [field]: value }));
   };
@@ -71,38 +98,60 @@ export function ProfilePage() {
     setPasswordData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSaveProfile = () => {
-    // Validate & Save logic here
-    toast.success("Đã lưu thông tin thành công!");
-    setIsEditing(false);
+  const handleSaveProfile = async () => {
+    try {
+      await userService.updateProfile({
+        full_name: userData.full_name,
+      });
+      toast.success("Đã lưu thông tin thành công!");
+      updateUser({ ...user, full_name: userData.full_name });
+      setIsEditing(false);
+    } catch (error) {
+      toast.error("Lỗi khi lưu thông tin");
+    }
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast.error("Mật khẩu xác nhận không khớp!");
       return;
     }
-    // Change password logic here
-    toast.success("Đã đổi mật khẩu thành công!");
-    setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
-    setIsEditingPassword(false);
+    if (passwordData.newPassword.length < 6) {
+      toast.error("Mật khẩu phải có ít nhất 6 ký tự!");
+      return;
+    }
+    try {
+      await userService.changePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+      toast.success("Đã đổi mật khẩu thành công!");
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setIsEditingPassword(false);
+    } catch (error: any) {
+      toast.error(error.message || "Lỗi khi đổi mật khẩu");
+    }
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    // Reset to original data
+    if (user) {
+      setUserData({
+        full_name: user.full_name || "",
+        email: user.email || "",
+        phone: "",
+        dateOfBirth: "",
+        gender: "male",
+        province: "hcm",
+        district: "",
+        ward: "",
+        streetAddress: "",
+        zalo: "",
+        facebook: "",
+        accountType: "personal",
+      });
+    }
   };
-
-  const myProperties = [
-    { id: 1, title: "Căn Hộ Vinhomes Central Park", status: "active", views: 1234, favorites: 45 },
-    { id: 2, title: "Nhà Phố Thảo Điền", status: "active", views: 856, favorites: 32 },
-    { id: 3, title: "Biệt Thự Phú Mỹ Hưng", status: "pending", views: 2341, favorites: 78 },
-  ];
-
-  const savedProperties = [
-    { id: 4, title: "Căn Hộ The Sun Avenue", price: "3.8 tỷ", location: "Bình Thạnh" },
-    { id: 5, title: "Căn Hộ Masteri Thảo Điền", price: "6.8 tỷ", location: "Quận 2" },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
@@ -143,7 +192,7 @@ export function ProfilePage() {
               <div className="relative">
                 <Avatar className="w-32 h-32 mb-4">
                   <div className="w-full h-full bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center text-white text-4xl font-bold">
-                    {userData.fullName.charAt(0)}
+                    {(userData.full_name || user?.username || "U").charAt(0).toUpperCase()}
                   </div>
                 </Avatar>
                 <Button
@@ -155,7 +204,7 @@ export function ProfilePage() {
               </div>
 
               <h3 className="text-xl font-bold text-foreground text-center mb-1">
-                {userData.fullName}
+                {userData.full_name || user?.username}
               </h3>
               <p className="text-sm text-foreground/70 mb-2">{userData.email}</p>
 
@@ -169,27 +218,35 @@ export function ProfilePage() {
 
             <Separator className="my-6" />
 
-            <div className="space-y-2">
+            <div className="space-y-2 mb-6">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-foreground/70">Loại tài khoản</span>
-                <span className="font-medium text-foreground capitalize">
-                  {userData.accountType === "personal" ? "Cá nhân" :
-                   userData.accountType === "agent" ? "Môi giới" : "Doanh nghiệp"}
+                <span className="font-medium text-foreground">
+                  {getRoleName(user?.role || 3)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-foreground/70">Thành viên từ</span>
                 <span className="font-medium text-foreground">
-                  {new Date(userData.memberSince).toLocaleDateString('vi-VN')}
+                  {user?.created_at ? new Date(user.created_at).toLocaleDateString('vi-VN') : "N/A"}
                 </span>
               </div>
             </div>
+
+            {(user?.role === ROLES.BUYER || user?.role === ROLES.SELLER) && (
+              <Link to="/become-seller">
+                <Button className="w-full gap-2" variant="default">
+                  <Building2 className="w-4 h-4" />
+                  {user?.role === ROLES.BUYER ? "Trở Thành Người Bán" : "Quản Lý Yêu Cầu Bán"}
+                </Button>
+              </Link>
+            )}
           </Card>
 
           {/* Main Content */}
           <div className="lg:col-span-3">
             <Tabs defaultValue="profile" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className={`grid w-full ${(user?.role === ROLES.SELLER || user?.role === ROLES.ADMIN) ? "grid-cols-5" : "grid-cols-4"}`}>
                 <TabsTrigger value="profile" className="flex items-center gap-2">
                   <User className="w-4 h-4" />
                   Thông Tin
@@ -198,10 +255,12 @@ export function ProfilePage() {
                   <Lock className="w-4 h-4" />
                   Bảo Mật
                 </TabsTrigger>
-                <TabsTrigger value="properties" className="flex items-center gap-2">
-                  <Home className="w-4 h-4" />
-                  BĐS Của Tôi
-                </TabsTrigger>
+                {(user?.role === ROLES.SELLER || user?.role === ROLES.ADMIN) && (
+                  <TabsTrigger value="properties" className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Quản Lý BĐS
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="saved" className="flex items-center gap-2">
                   <Heart className="w-4 h-4" />
                   Đã Lưu
@@ -261,8 +320,8 @@ export function ProfilePage() {
                           </Label>
                           <Input
                             id="fullName"
-                            value={userData.fullName}
-                            onChange={(e) => updateUserData("fullName", e.target.value)}
+                            value={userData.full_name}
+                            onChange={(e) => updateUserData("full_name", e.target.value)}
                             disabled={!isEditing}
                           />
                         </div>
@@ -338,9 +397,9 @@ export function ProfilePage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="personal">Cá Nhân</SelectItem>
-                              <SelectItem value="agent">Môi Giới</SelectItem>
-                              <SelectItem value="company">Doanh Nghiệp</SelectItem>
+                              <SelectItem value="personal">Người mua bất động sản</SelectItem>
+                              <SelectItem value="agent">Người bán bất động sản</SelectItem>
+                              <SelectItem value="company">Công Ty/Doanh Nghiệp</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -617,61 +676,11 @@ export function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              {/* My Properties Tab */}
-              <TabsContent value="properties">
-                <Card className="p-8 bg-white border-border">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-foreground">
-                      Bất Động Sản Của Tôi
-                    </h2>
-                    <Link to="/admin/add-property">
-                      <Button className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]">
-                        <Building2 className="w-4 h-4 mr-2" />
-                        Đăng Tin Mới
-                      </Button>
-                    </Link>
-                  </div>
-
-                  <div className="space-y-4">
-                    {myProperties.map((property) => (
-                      <div
-                        key={property.id}
-                        className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <h3 className="font-bold text-foreground mb-2">
-                            {property.title}
-                          </h3>
-                          <div className="flex items-center gap-4 text-sm text-foreground/70">
-                            <div className="flex items-center gap-1">
-                              <Eye className="w-4 h-4" />
-                              {property.views} lượt xem
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Heart className="w-4 h-4" />
-                              {property.favorites} yêu thích
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {property.status === "active" ? (
-                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                              Đang hiển thị
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
-                              Chờ duyệt
-                            </span>
-                          )}
-                          <Button variant="outline" size="sm">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </TabsContent>
+              {(user?.role === ROLES.SELLER || user?.role === ROLES.ADMIN) && (
+                <TabsContent value="properties">
+                  <PropertyManagementTab />
+                </TabsContent>
+              )}
 
               {/* Saved Properties Tab */}
               <TabsContent value="saved">
@@ -680,33 +689,63 @@ export function ProfilePage() {
                     Bất Động Sản Đã Lưu
                   </h2>
 
-                  <div className="space-y-4">
-                    {savedProperties.map((property) => (
-                      <Link
-                        key={property.id}
-                        to={`/properties/${property.id}`}
-                        className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div>
-                          <h3 className="font-bold text-foreground mb-2">
-                            {property.title}
-                          </h3>
-                          <div className="flex items-center gap-4 text-sm text-foreground/70">
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {property.location}
-                            </div>
-                            <div className="font-bold text-foreground">
-                              {property.price}
-                            </div>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm">
-                          <Heart className="w-4 h-4 fill-red-500 text-red-500" />
+                  {savedLoading ? (
+                    <div className="text-center py-8 text-foreground/70">Đang tải...</div>
+                  ) : savedProperties.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Heart className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-foreground/70">Chưa có BĐS nào được lưu</p>
+                      <Link to="/properties">
+                        <Button className="mt-4 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]">
+                          Tìm Kiếm BĐS
                         </Button>
                       </Link>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {savedProperties.map((property) => {
+                        const images = Array.isArray(property.images) ? property.images : [];
+                        const imageUrl = images.length > 0 ? images[0] : "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400";
+                        return (
+                          <Link
+                            key={property.id}
+                            to={`/properties/${property.id}`}
+                            className="group p-4 border border-border rounded-xl hover:shadow-md transition-all bg-white"
+                          >
+                            <div className="w-full h-40 rounded-lg bg-gray-100 mb-4 overflow-hidden">
+                              <img
+                                src={imageUrl}
+                                alt={property.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            </div>
+                            <h3 className="font-bold text-foreground mb-2 line-clamp-1">
+                              {property.title}
+                            </h3>
+                            <div className="flex items-center gap-2 text-sm text-foreground/70 mb-3">
+                              <MapPin className="w-4 h-4" />
+                              {property.address}, {property.district}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-lg text-[#3B82F6]">
+                                {property.price >= 1000000000
+                                  ? `${(property.price / 1000000000).toFixed(1)} tỷ`
+                                  : `${(property.price / 1000000).toFixed(0)} triệu`}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={(e) => handleRemoveSaved(property.id, e)}
+                              >
+                                <Heart className="w-5 h-5 fill-current" />
+                              </Button>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
                 </Card>
               </TabsContent>
 
