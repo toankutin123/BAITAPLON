@@ -1,0 +1,29 @@
+{
+  "result": [
+    {"province": "hanoi", "zone": "Ba Đình", "avg_price_per_m2": 85.5},
+    {"province": "hanoi", "zone": "Hoàn Kiếm", "avg_price_per_m2": 95.2},
+    {"province": "hanoi", "zone": "Đống Đa", "avg_price_per_m2": 72.3},
+    {"province": "hanoi", "zone": "Hai Bà Trưng", "avg_price_per_m2": 68.9},
+    {"province": "hanoi", "zone": "Thanh Xuân", "avg_price_per_m2": 55.2},
+    {"province": "hanoi", "zone": "Cầu Giấy", "avg_price_per_m2": 78.5},
+    {"province": "hanoi", "zone": "Nam Từ Liêm", "avg_price_per_m2": 65.8},
+    {"province": "hanoi", "zone": "Bắc Từ Liêm", "avg_price_per_m2": 52.3},
+    {"province": "hanoi", "zone": "Hoàng Mai", "avg_price_per_m2": 45.6},
+    {"province": "hanoi", "zone": "Long Biên", "avg_price_per_m2": 48.9},
+    {"province": "hcm", "zone": "Quận 1", "avg_price_per_m2": 180.5},
+    {"province": "hcm", "zone": "Quận 3", "avg_price_per_m2": 145.2},
+    {"province": "hcm", "zone": "Phú Nhuận", "avg_price_per_m2": 125.8},
+    {"province": "hcm", "zone": "Bình Thạnh", "avg_price_per_m2": 110.3},
+    {"province": "hcm", "zone": "Gò Vấp", "avg_price_per_m2": 85.6},
+    {"province": "hcm", "zone": "Tân Bình", "avg_price_per_m2": 92.4},
+    {"province": "hcm", "zone": "Tân Phú", "avg_price_per_m2": 72.8},
+    {"province": "hcm", "zone": "Thủ Đức", "avg_price_per_m2": 88.5},
+    {"province": "hcm", "zone": "Quận 7", "avg_price_per_m2": 135.6},
+    {"province": "hcm", "zone": "Quận 9", "avg_price_per_m2": 75.2},
+    {"province": "danang", "zone": "Hải Châu", "avg_price_per_m2": 55.8},
+    {"province": "danang", "zone": "Thanh Khê", "avg_price_per_m2": 42.3},
+    {"province": "danang", "zone": "Sơn Trà", "avg_price_per_m2": 48.5},
+    {"province": "danang", "zone": "Ngũ Hành Sơn", "avg_price_per_m2": 62.4},
+    {"province": "danang", "zone": "Liên Chiểu", "avg_price_per_m2": 35.6}
+  ]
+}
