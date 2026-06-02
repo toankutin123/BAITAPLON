@@ -1,6 +1,6 @@
 import { authService } from "./auth.service";
 
-const API_URL = "http://localhost:8001/api/properties";
+const API_URL = `${import.meta.env.VITE_API_URL}/api/properties`;
 
 export interface Property {
   id: number;
@@ -188,7 +188,7 @@ export const propertyService = {
   },
 
   async getSavedProperties(): Promise<Property[]> {
-    const SAVED_API_URL = "http://localhost:8001/api/saved-properties";
+    const SAVED_API_URL = `${import.meta.env.VITE_API_URL}/api/saved-properties`;
     const response = await fetch(`${SAVED_API_URL}`, {
       headers: getHeaders(),
     });
@@ -199,7 +199,7 @@ export const propertyService = {
   },
 
   async saveProperty(propertyId: number): Promise<void> {
-    const SAVED_API_URL = "http://localhost:8001/api/saved-properties";
+    const SAVED_API_URL = `${import.meta.env.VITE_API_URL}/api/saved-properties`;
     const response = await fetch(`${SAVED_API_URL}`, {
       method: "POST",
       headers: getHeaders(),
@@ -211,7 +211,7 @@ export const propertyService = {
   },
 
   async removeSavedProperty(propertyId: number): Promise<void> {
-    const SAVED_API_URL = "http://localhost:8001/api/saved-properties";
+    const SAVED_API_URL = `${import.meta.env.VITE_API_URL}/api/saved-properties`;
     const response = await fetch(`${SAVED_API_URL}/${propertyId}`, {
       method: "DELETE",
       headers: getHeaders(),

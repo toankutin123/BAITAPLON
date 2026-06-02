@@ -36,7 +36,7 @@ export function PropertyDetailPage() {
   const checkIfSaved = async (propertyId: string) => {
     if (!user) return;
     try {
-      const SAVED_API_URL = "http://localhost:8001/api/saved-properties";
+      const SAVED_API_URL = `${import.meta.env.VITE_API_URL}/api/saved-properties`;
       const response = await fetch(`${SAVED_API_URL}/check/${propertyId}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
