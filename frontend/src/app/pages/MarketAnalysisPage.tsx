@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   TrendingUp, ArrowLeft, Filter, TrendingDown, Building2,
-  MapPin, Calendar, Download, RefreshCw
+  MapPin, Calendar, Download, RefreshCw, Activity, DollarSign
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -12,27 +12,8 @@ import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
-
-const priceHistoryData = [
-  { month: "T7/25", q1: 5800000000, q7: 4500000000, binhThanh: 3800000000 },
-  { month: "T8/25", q1: 5950000000, q7: 4650000000, binhThanh: 3900000000 },
-  { month: "T9/25", q1: 6100000000, q7: 4750000000, binhThanh: 3950000000 },
-  { month: "T10/25", q1: 6250000000, q7: 4900000000, binhThanh: 4050000000 },
-  { month: "T11/25", q1: 6400000000, q7: 5050000000, binhThanh: 4150000000 },
-  { month: "T12/25", q1: 6550000000, q7: 5200000000, binhThanh: 4250000000 },
-  { month: "T1/26", q1: 6700000000, q7: 5350000000, binhThanh: 4350000000 },
-  { month: "T2/26", q1: 6850000000, q7: 5500000000, binhThanh: 4450000000 },
-  { month: "T3/26", q1: 7000000000, q7: 5650000000, binhThanh: 4550000000 },
-  { month: "T4/26", q1: 7150000000, q7: 5800000000, binhThanh: 4650000000 },
-];
-
-const propertyTypeData = [
-  { type: "Chung Cư", average: 5200000000, count: 1250 },
-  { type: "Nhà Phố", average: 7800000000, count: 680 },
-  { type: "Căn Hộ Cao Cấp", average: 6200000000, count: 920 },
-  { type: "Nhà Liền Kề", average: 8900000000, count: 340 },
-  { type: "Biệt Thự", average: 12500000000, count: 150 },
-];
+import { marketService, AveragePriceRecord } from "../services/market.service";
+import { aiApi } from "../services/aiApi";
 
 const marketVolumeData = [
   { month: "T7", sales: 320 },
@@ -47,9 +28,163 @@ const marketVolumeData = [
   { month: "T4", sales: 460 },
 ];
 
+const cityNames: Record<string, string> = {
+  hcm: "TP. Hồ Chí Minh",
+  hanoi: "Hà Nội",
+  danang: "Đà Nẵng",
+  haiphong: "Hải Phòng",
+  cantho: "Cần Thơ",
+};
+
+const formatMarketPrice = (value: number) =>
+  value ? `${value.toFixed(2)} triệu/m²` : "-";
+
 export function MarketAnalysisPage() {
-  const [selectedCity, setSelectedCity] = useState("hcm");
+  const [selectedCity, setSelectedCity] = useState("hanoi");
   const [selectedTimeRange, setSelectedTimeRange] = useState("10m");
+  const [selectedPropertyType, setSelectedPropertyType] = useState("");
+  const [averageData, setAverageData] = useState<AveragePriceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [aiInsights, setAIInsights] = useState<string>("");
+  const [aiLoading, setAILoading] = useState(true);
+  const [aiError, setAIError] = useState<string | null>(null);
+
+  // AI Dashboard data
+  const [aiDashboard, setAIDashboard] = useState<any>(null);
+  const [aiDashboardLoading, setAIDashboardLoading] = useState(false);
+
+  // Reload data when filters change
+  useEffect(() => {
+    loadData();
+    loadAIInsights();
+  }, [selectedCity, selectedPropertyType]);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await marketService.getAveragePrices(selectedCity || undefined);
+      setAverageData(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Lỗi tải dữ liệu thị trường");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAIInsights = async () => {
+    setAILoading(true);
+    setAIError(null);
+    try {
+      const insights = await marketService.getAIInsights(selectedCity);
+      setAIInsights(insights);
+    } catch (err) {
+      setAIError(err instanceof Error ? err.message : "Lỗi tải thông tin AI");
+    } finally {
+      setAILoading(false);
+    }
+  };
+
+  // Load AI Dashboard data
+  useEffect(() => {
+    const loadAIDashboard = async () => {
+      setAIDashboardLoading(true);
+      try {
+        const cityMap: Record<string, string> = {
+          hanoi: 'Hà Nội',
+          hcm: 'Hồ Chí Minh',
+          danang: 'Đà Nẵng',
+          haiphong: 'Hải Phòng',
+          cantho: 'Cần Thơ',
+        };
+        const cityName = cityMap[selectedCity] || 'Hà Nội';
+        const data = await aiApi.getDashboard(cityName);
+        setAIDashboard(data);
+      } catch (err) {
+        console.error('Error loading AI dashboard:', err);
+      } finally {
+        setAIDashboardLoading(false);
+      }
+    };
+
+    loadAIDashboard();
+  }, [selectedCity]);
+
+  const filteredData = useMemo(
+    () => averageData.filter((item) => item.province.toLowerCase() === selectedCity.toLowerCase()),
+    [averageData, selectedCity]
+  );
+
+  const provinceAverageData = useMemo(() => {
+    const provinceMap: Record<string, { province: string; average_price_per_m2: number; count: number }> = {};
+    averageData.forEach((item) => {
+      const key = item.province;
+      if (!provinceMap[key]) {
+        provinceMap[key] = {
+          province: cityNames[key] || item.province,
+          average_price_per_m2: 0,
+          count: 0,
+        };
+      }
+      provinceMap[key].average_price_per_m2 += item.avg_price_per_m2;
+      provinceMap[key].count += 1;
+    });
+    return Object.values(provinceMap).map((item) => ({
+      province: item.province,
+      average_price_per_m2: item.count ? item.average_price_per_m2 / item.count : 0,
+    }));
+  }, [averageData]);
+
+  const cityAverage = useMemo(() => {
+    if (!filteredData.length) return 0;
+    return filteredData.reduce((sum, item) => sum + item.avg_price_per_m2, 0) / filteredData.length;
+  }, [filteredData]);
+
+  const maxZoneRecord = useMemo(
+    () => filteredData.reduce((prev, item) => (item.avg_price_per_m2 > prev.avg_price_per_m2 ? item : prev), filteredData[0] || { province: "", zone: "", avg_price_per_m2: 0 }),
+    [filteredData]
+  );
+
+  const minZoneRecord = useMemo(
+    () => filteredData.reduce((prev, item) => (item.avg_price_per_m2 < prev.avg_price_per_m2 ? item : prev), filteredData[0] || { province: "", zone: "", avg_price_per_m2: 0 }),
+    [filteredData]
+  );
+
+  const metrics = [
+    {
+      label: "Giá Trung Bình",
+      value: formatMarketPrice(cityAverage),
+      change: filteredData.length ? "+0.0%" : "-",
+      trend: filteredData.length ? "up" : "up",
+      icon: TrendingUp,
+      gradient: "from-blue-500 to-cyan-500",
+    },
+    {
+      label: "Khu Vực Cao Nhất",
+      value: filteredData.length ? `${maxZoneRecord.zone} (${formatMarketPrice(maxZoneRecord.avg_price_per_m2)})` : "Không có dữ liệu",
+      change: "+",
+      trend: "up",
+      icon: Building2,
+      gradient: "from-purple-500 to-pink-500",
+    },
+    {
+      label: "Khu Vực Thấp Nhất",
+      value: filteredData.length ? `${minZoneRecord.zone} (${formatMarketPrice(minZoneRecord.avg_price_per_m2)})` : "Không có dữ liệu",
+      change: "-",
+      trend: "down",
+      icon: TrendingDown,
+      gradient: "from-green-500 to-emerald-500",
+    },
+    {
+      label: "Số Khu Vực",
+      value: filteredData.length.toString(),
+      change: "",
+      trend: "up",
+      icon: MapPin,
+      gradient: "from-orange-500 to-red-500",
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
@@ -90,6 +225,18 @@ export function MarketAnalysisPage() {
           </p>
         </div>
 
+        {loading && (
+          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Đang tải dữ liệu thị trường...
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
         {/* Filters */}
         <Card className="p-6 mb-8 bg-white border-border">
           <div className="flex items-center gap-4 flex-wrap">
@@ -116,9 +263,9 @@ export function MarketAnalysisPage() {
 
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-foreground/50" />
-              <Select defaultValue="all">
+              <Select value={selectedPropertyType} onValueChange={setSelectedPropertyType}>
                 <SelectTrigger className="w-48">
-                  <SelectValue />
+                  <SelectValue placeholder="Loại BĐS" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất Cả Loại BĐS</SelectItem>
@@ -147,11 +294,20 @@ export function MarketAnalysisPage() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => { loadData(); loadAIInsights(); }}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Làm Mới
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => {
+                // Export data to CSV
+                const csv = averageData.map(d => `${d.province},${d.zone},${d.avg_price_per_m2}`).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `market-analysis-${selectedCity}.csv`;
+                a.click();
+              }}>
                 <Download className="w-4 h-4 mr-2" />
                 Xuất File
               </Button>
@@ -161,40 +317,7 @@ export function MarketAnalysisPage() {
 
         {/* Key Metrics */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
-          {[
-            {
-              label: "Giá Trung Bình",
-              value: "7.15 tỷ",
-              change: "+12.3%",
-              trend: "up",
-              icon: TrendingUp,
-              gradient: "from-blue-500 to-cyan-500"
-            },
-            {
-              label: "Giá Trung Vị",
-              value: "5.65 tỷ",
-              change: "+8.7%",
-              trend: "up",
-              icon: Building2,
-              gradient: "from-purple-500 to-pink-500"
-            },
-            {
-              label: "BĐS Đã Bán",
-              value: "460",
-              change: "+15.2%",
-              trend: "up",
-              icon: TrendingUp,
-              gradient: "from-green-500 to-emerald-500"
-            },
-            {
-              label: "Thời Gian Bán TB",
-              value: "28 ngày",
-              change: "-5.4%",
-              trend: "down",
-              icon: TrendingDown,
-              gradient: "from-orange-500 to-red-500"
-            }
-          ].map((metric, index) => (
+          {metrics.map((metric, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, y: 20 }}
@@ -238,16 +361,16 @@ export function MarketAnalysisPage() {
           >
             <Card className="p-6 bg-white border-border">
               <h3 className="text-xl font-bold text-foreground mb-6">
-                Xu Hướng Giá Theo Khu Vực
+                Giá Trung Bình Theo Khu Vực
               </h3>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={priceHistoryData}>
+                <LineChart data={filteredData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                  <XAxis dataKey="month" stroke="#64748B" fontSize={12} />
+                  <XAxis dataKey="zone" stroke="#64748B" fontSize={12} />
                   <YAxis
                     stroke="#64748B"
                     fontSize={12}
-                    tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}tỷ`}
+                    tickFormatter={(value) => `${value.toFixed(0)} triệu`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -255,32 +378,16 @@ export function MarketAnalysisPage() {
                       border: '1px solid #E2E8F0',
                       borderRadius: '8px'
                     }}
-                    formatter={(value: number) => `${(value / 1000000000).toFixed(2)} tỷ VND`}
+                    formatter={(value: number) => [`${value.toFixed(2)} triệu/m²`, 'Giá TB/m²']}
                   />
                   <Legend />
                   <Line
                     type="monotone"
-                    dataKey="q1"
+                    dataKey="avg_price_per_m2"
                     stroke="#3B82F6"
                     strokeWidth={2}
                     dot={{ fill: '#3B82F6', r: 3 }}
-                    name="Quận 1"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="q7"
-                    stroke="#8B5CF6"
-                    strokeWidth={2}
-                    dot={{ fill: '#8B5CF6', r: 3 }}
-                    name="Quận 7"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="binhThanh"
-                    stroke="#06B6D4"
-                    strokeWidth={2}
-                    dot={{ fill: '#06B6D4', r: 3 }}
-                    name="Bình Thạnh"
+                    name="Giá trung bình"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -338,10 +445,10 @@ export function MarketAnalysisPage() {
         >
           <Card className="p-6 bg-white border-border mb-8">
             <h3 className="text-xl font-bold text-foreground mb-6">
-              Giá Trung Bình Theo Loại Bất Động Sản
+              Giá Trung Bình Theo Tỉnh
             </h3>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={propertyTypeData}>
+              <BarChart data={provinceAverageData}>
                 <defs>
                   <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#3B82F6" />
@@ -349,11 +456,11 @@ export function MarketAnalysisPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                <XAxis dataKey="type" stroke="#64748B" fontSize={12} />
+                <XAxis dataKey="province" stroke="#64748B" fontSize={12} />
                 <YAxis
                   stroke="#64748B"
                   fontSize={12}
-                  tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}tỷ`}
+                  tickFormatter={(value) => `${value.toFixed(0)} triệu`}
                 />
                 <Tooltip
                   contentStyle={{
@@ -361,11 +468,150 @@ export function MarketAnalysisPage() {
                     border: '1px solid #E2E8F0',
                     borderRadius: '8px'
                   }}
-                  formatter={(value: number) => [`${(value / 1000000000).toFixed(2)} tỷ VND`, 'Giá TB']}
+                  formatter={(value: number) => [`${value.toFixed(2)} triệu/m²`, 'Giá TB/m²']}
                 />
-                <Bar dataKey="average" fill="url(#barGradient)" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="average_price_per_m2" fill="url(#barGradient)" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </Card>
+        </motion.div>
+
+// AI Dashboard Section
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.35 }}
+        >
+          <Card className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground">
+                  AI Analytics Dashboard
+                </h3>
+              </div>
+              {aiDashboardLoading && (
+                <span className="text-sm text-green-600">Đang tải...</span>
+              )}
+            </div>
+
+            {aiDashboard && (
+              <div className="space-y-6">
+                {/* Key Metrics */}
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-lg border">
+                    <div className="flex items-center gap-2 text-gray-500 mb-1">
+                      <DollarSign className="w-4 h-4" />
+                      <span className="text-sm">Giá TB</span>
+                    </div>
+                    <p className="text-xl font-bold text-green-600">
+                      {formatMarketPrice(aiDashboard.avg_price)}
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border">
+                    <div className="flex items-center gap-2 text-gray-500 mb-1">
+                      <Building2 className="w-4 h-4" />
+                      <span className="text-sm">Tổng tin đăng</span>
+                    </div>
+                    <p className="text-xl font-bold">
+                      {aiDashboard.total_listings?.toLocaleString() || 0}
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border">
+                    <div className="flex items-center gap-2 text-gray-500 mb-1">
+                      <Activity className="w-4 h-4" />
+                      <span className="text-sm">Sức khỏe thị trường</span>
+                    </div>
+                    <p className="text-xl font-bold text-blue-600">
+                      {aiDashboard.market_health_score?.toFixed(0) || 0}/100
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border">
+                    <div className="flex items-center gap-2 text-gray-500 mb-1">
+                      <TrendingUp className="w-4 h-4" />
+                      <span className="text-sm">Tin mới hôm nay</span>
+                    </div>
+                    <p className="text-xl font-bold text-orange-600">
+                      {aiDashboard.new_listings_today || 0}
+                    </p>
+                  </div>
+                </div>
+
+                {/* District Rankings */}
+                {aiDashboard.top_districts?.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Top quận huyện theo giá
+                    </h4>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {aiDashboard.top_districts.slice(0, 6).map((district: any, idx: number) => (
+                        <div key={idx} className="bg-white p-3 rounded-lg border flex justify-between items-center">
+                          <div>
+                            <p className="font-medium text-sm">{district.district}</p>
+                            <p className="text-xs text-gray-500">{district.listing_count} tin</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-blue-600">{formatMarketPrice(district.avg_price)}</p>
+                            <p className={`text-xs ${district.price_change_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {district.price_change_pct >= 0 ? '+' : ''}{district.price_change_pct?.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Rising/Declining Areas */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {aiDashboard.rising_areas?.length > 0 && (
+                    <div className="bg-white p-4 rounded-lg border">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2 text-green-600">
+                        <TrendingUp className="w-4 h-4" />
+                        Khu vực tăng giá
+                      </h4>
+                      <div className="space-y-2">
+                        {aiDashboard.rising_areas.slice(0, 5).map((area: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center">
+                            <span className="text-sm">{area.area}</span>
+                            <span className="text-sm font-medium text-green-600">
+                              +{area.price_change_pct?.toFixed(1)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {aiDashboard.declining_areas?.length > 0 && (
+                    <div className="bg-white p-4 rounded-lg border">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2 text-red-600">
+                        <TrendingDown className="w-4 h-4" />
+                        Khu vực giảm giá
+                      </h4>
+                      <div className="space-y-2">
+                        {aiDashboard.declining_areas.slice(0, 5).map((area: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center">
+                            <span className="text-sm">{area.area}</span>
+                            <span className="text-sm font-medium text-red-600">
+                              {area.price_change_pct?.toFixed(1)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!aiDashboard && !aiDashboardLoading && (
+              <p className="text-center text-gray-500 py-4">
+                Kết nối API để xem dữ liệu AI Dashboard
+              </p>
+            )}
           </Card>
         </motion.div>
 
@@ -385,76 +631,40 @@ export function MarketAnalysisPage() {
               </h3>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="p-4 bg-white rounded-xl border border-blue-200">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                      <TrendingUp className="w-4 h-4 text-green-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-foreground mb-1">Thị Trường Người Mua Đang Nổi Lên</h4>
-                      <p className="text-sm text-foreground/70 leading-relaxed">
-                        Nguồn cung tăng 18% trong khi cầu ổn định. Cơ hội tốt để người mua
-                        thương lượng giá tại Quận 1 và Quận 7.
-                      </p>
-                    </div>
-                  </div>
+            <div className="space-y-4">
+              {aiLoading && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-700">
+                  Đang lấy thông tin AI...
                 </div>
+              )}
 
-                <div className="p-4 bg-white rounded-xl border border-blue-200">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <Building2 className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-foreground mb-1">Căn Hộ Tăng Giá Mạnh</h4>
-                      <p className="text-sm text-foreground/70 leading-relaxed">
-                        Căn hộ chung cư tăng trưởng mạnh nhất +14.2% so với cùng kỳ, vượt các loại BĐS khác.
-                        Được thúc đẩy bởi các dự án mới ven sông.
-                      </p>
-                    </div>
-                  </div>
+              {aiError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
+                  {aiError}
                 </div>
-              </div>
+              )}
 
-              <div className="space-y-4">
+              {!aiLoading && !aiError && (
                 <div className="p-4 bg-white rounded-xl border border-blue-200">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-foreground mb-1">Khu Vực Nóng</h4>
-                      <p className="text-sm text-foreground/70 leading-relaxed">
-                        Thủ Thiêm, Phú Mỹ Hưng và Nhà Bè đang có mức tăng giá cao nhất.
-                        Thời gian bán trung bình giảm xuống còn 21 ngày tại các khu vực này.
-                      </p>
-                    </div>
-                  </div>
+                  {aiInsights.split("\n").filter((line) => line.trim()).map((line, index) => (
+                    <p key={index} className="text-sm text-foreground/70 leading-relaxed mb-3">
+                      {line}
+                    </p>
+                  ))}
                 </div>
-
-                <div className="p-4 bg-white rounded-xl border border-blue-200">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                      <Calendar className="w-4 h-4 text-orange-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-foreground mb-1">Cảnh Báo Xu Hướng Mùa Vụ</h4>
-                      <p className="text-sm text-foreground/70 leading-relaxed">
-                        Mùa mua sắm xuân có hoạt động cao hơn 23% so với năm ngoái.
-                        Dự kiến xu hướng tiếp tục đến tháng 6 và có thể chậm lại vào tháng 7.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="mt-6 pt-6 border-t border-blue-200">
               <p className="text-sm text-foreground/70 text-center">
-                <strong className="text-foreground">Cập nhật lần cuối:</strong> 17 tháng 4, 2026 lúc 10:24 SA
-                • Dữ liệu làm mới mỗi 24 giờ
+                <strong className="text-foreground">Cập nhật lần cuối:</strong> {new Date().toLocaleString('vi-VN', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+                • Dữ liệu được cập nhật theo yêu cầu
               </p>
             </div>
           </Card>
