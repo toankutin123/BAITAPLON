@@ -70,9 +70,8 @@ app.include_router(saved_properties_router, tags=["SavedProperties"])
 # Admin routes
 app.include_router(admin_router, tags=["Admin"])
 
-# Admin Chat routes
+# Admin Chat routes (user only - admin chat is in dashboard)
 app.include_router(admin_chat_router, prefix="/api/admin/chat", tags=["AdminChat"])
-
 
 @app.get("/")
 def root():

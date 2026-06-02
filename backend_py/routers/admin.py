@@ -9,11 +9,6 @@ from middleware.auth import require_role
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 
-# Admin chat endpoints mounted at: /api/admin
-from routers.admin_chat import router as admin_chat_router
-router.include_router(admin_chat_router)
-
-
 @router.get("/stats")
 async def get_admin_stats(current_user: dict = Depends(require_role(1))):
     """Get admin dashboard statistics"""

@@ -67,10 +67,12 @@ export function HomePage() {
                   <User className="w-4 h-4 mr-2" />
                   Thông tin cá nhân
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/chat-with-admin")}>
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Chat với Admin
-                </DropdownMenuItem>
+                {user?.role !== 1 && (
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/chat-with-admin")}>
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Chat với Admin
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer" onClick={handleLogout}>
                   <LogOut className="w-4 h-4 mr-2" />
