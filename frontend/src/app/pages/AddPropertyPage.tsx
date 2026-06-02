@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom"; 
+import { Link, useNavigate } from "react-router-dom"; 
 import { motion } from "motion/react";
 import {
   TrendingUp, ArrowLeft, Home, MapPin, DollarSign, Ruler, Bed, Bath,
   Building2, FileText, Image, Phone, Mail, User, Calendar, Compass,
-  Check, Upload, X, Plus
+  Check, Upload, X, Plus, Loader2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -14,9 +14,12 @@ import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 import { toast } from "sonner";
+import { propertyService, PropertyFormData } from "../services/property.service";
 
 export function AddPropertyPage() {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     // Thông tin cơ bản
     title: "",
@@ -61,6 +64,41 @@ export function AddPropertyPage() {
     // Hình ảnh
     images: [] as string[],
   });
+  
+  // Handle image file selection
+  const handleImageSelect = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files) {
+        // Convert files to base64 URLs for demo
+        const newImages: string[] = [];
+        Array.from(files).forEach((file, index) => {
+          if (index >= 10) return; // Max 10 images
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            setFormData(prev => ({
+              ...prev,
+              images: [...prev.images, base64].slice(0, 10)
+            }));
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+    };
+    input.click();
+  };
+  
+  const removeImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
 
   const updateFormData = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -75,10 +113,56 @@ export function AddPropertyPage() {
     }));
   };
 
-  const handleSubmit = () => {
-    // Validate & Submit
-    console.log("Form Data:", formData);
-    toast.success("Đã thêm bất động sản thành công!");
+  const handleSubmit = async () => {
+    // Validate required fields
+    if (!formData.title.trim()) {
+      toast.error("Vui lòng nhập tiêu đề");
+      return;
+    }
+    if (!formData.propertyType) {
+      toast.error("Vui lòng chọn loại bất động sản");
+      return;
+    }
+    if (!formData.price || parseFloat(formData.price) <= 0) {
+      toast.error("Vui lòng nhập giá hợp lệ");
+      return;
+    }
+    if (!formData.area || parseFloat(formData.area) <= 0) {
+      toast.error("Vui lòng nhập diện tích hợp lệ");
+      return;
+    }
+    if (!formData.district) {
+      toast.error("Vui lòng chọn quận/huyện");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Convert form data to API format
+      const propertyData: PropertyFormData = {
+        title: formData.title,
+        description: formData.description || "",
+        property_type: formData.propertyType,
+        price: parseFloat(formData.price),
+        price_unit: "VND",
+        area: parseFloat(formData.area),
+        address: `${formData.streetAddress || ""}, ${formData.ward || ""}`.trim(),
+        city: formData.province || "TP.HCM",
+        district: formData.district,
+        bedrooms: parseInt(formData.bedrooms) || 0,
+        bathrooms: parseInt(formData.bathrooms) || 0,
+        images: formData.images,
+      };
+
+      await propertyService.createProperty(propertyData);
+      toast.success("Đã thêm bất động sản thành công! Đang chờ duyệt.");
+      navigate("/properties");
+    } catch (error) {
+      console.error("Error creating property:", error);
+      toast.error(error instanceof Error ? error.message : "Có lỗi xảy ra khi thêm BĐS");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const steps = [
@@ -101,10 +185,10 @@ export function AddPropertyPage() {
             <span className="text-xl font-bold text-foreground">EstateAI</span>
           </Link>
 
-          <Link to="/admin">
+          <Link to="/profile">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Về Admin Dashboard
+              Về Quản Lý BĐS
             </Button>
           </Link>
         </div>
@@ -619,7 +703,30 @@ export function AddPropertyPage() {
                     <Image className="w-4 h-4" />
                     Hình Ảnh BĐS
                   </Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-gray-50 transition-colors cursor-pointer">
+                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-gray-50 transition-colors">
+                    <input
+                      type="file"
+                      id="image-upload"
+                      className="hidden"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (files) {
+                          Array.from(files).slice(0, 10 - formData.images.length).forEach((file) => {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const base64 = event.target?.result as string;
+                              setFormData(prev => ({
+                                ...prev,
+                                images: [...prev.images, base64].slice(0, 10)
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          });
+                        }
+                      }}
+                    />
                     <Upload className="w-12 h-12 mx-auto text-foreground/50 mb-4" />
                     <p className="text-foreground/70 mb-2">
                       Kéo thả hình ảnh vào đây hoặc nhấn để chọn
@@ -627,11 +734,30 @@ export function AddPropertyPage() {
                     <p className="text-xs text-foreground/60">
                       Hỗ trợ: JPG, PNG (Tối đa 10 ảnh, mỗi ảnh &lt; 5MB)
                     </p>
-                    <Button variant="outline" className="mt-4">
+                    <Button variant="outline" className="mt-4" onClick={() => document.getElementById("image-upload")?.click()}>
                       <Plus className="w-4 h-4 mr-2" />
                       Chọn Ảnh
                     </Button>
                   </div>
+                  {formData.images.length > 0 && (
+                    <div className="grid grid-cols-5 gap-2 mt-4">
+                      {formData.images.map((img, idx) => (
+                        <div key={idx} className="relative group">
+                          <img src={img} alt={`Preview ${idx + 1}`} className="w-full h-20 object-cover rounded-lg" />
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({
+                              ...prev,
+                              images: prev.images.filter((_, i) => i !== idx)
+                            }))}
+                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -659,10 +785,20 @@ export function AddPropertyPage() {
             ) : (
               <Button
                 onClick={handleSubmit}
+                disabled={isSubmitting}
                 className="bg-gradient-to-r from-green-500 to-emerald-500"
               >
-                <Check className="w-4 h-4 mr-2" />
-                Hoàn Tất & Thêm BĐS
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Đang Xử Lý...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Hoàn Tất & Thêm BĐS
+                  </>
+                )}
               </Button>
             )}
           </div>

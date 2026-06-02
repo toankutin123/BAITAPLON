@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 
 import {
   TrendingUp, Search, Filter, Grid3x3, List, MapPin, Bed, Bath,
   Ruler, Heart, Phone, Eye, ArrowUpDown, ChevronDown, Building2,
-  DollarSign, Home, Star
+  DollarSign, Home, Star, Plus
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -18,122 +18,165 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
-
-// Mock Data
-const mockProperties = [
-  {
-    id: 1,
-    title: "Căn Hộ Vinhomes Central Park - View Sông Tuyệt Đẹp",
-    type: "Căn Hộ",
-    price: 5200000000,
-    area: 80,
-    bedrooms: 2,
-    bathrooms: 2,
-    location: "Quận 1, TP.HCM",
-    address: "123 Nguyễn Huệ, Phường Bến Nghé",
-    image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80",
-    status: "Đang bán",
-    featured: true,
-    views: 1234,
-    postedBy: "Công ty BĐS ABC",
-    postedDate: "2 ngày trước",
-    verified: true,
-  },
-  {
-    id: 2,
-    title: "Nhà Phố Thảo Điền - Khu Cao Cấp An Ninh",
-    type: "Nhà Phố",
-    price: 12500000000,
-    area: 150,
-    bedrooms: 4,
-    bathrooms: 3,
-    location: "Quận 2, TP.HCM",
-    address: "456 Đường Thảo Điền",
-    image: "https://images.unsplash.com/photo-1605276374104-dee2a0ed3cd6?w=800&q=80",
-    status: "Đang bán",
-    featured: false,
-    views: 856,
-    postedBy: "Nguyễn Văn A",
-    postedDate: "5 ngày trước",
-    verified: true,
-  },
-  {
-    id: 3,
-    title: "Biệt Thự Phú Mỹ Hưng - Sân Vườn Rộng Rãi",
-    type: "Biệt Thự",
-    price: 25000000000,
-    area: 300,
-    bedrooms: 5,
-    bathrooms: 4,
-    location: "Quận 7, TP.HCM",
-    address: "789 Nguyễn Lương Bằng",
-    image: "https://images.unsplash.com/photo-1613977257363-707ba9348227?w=800&q=80",
-    status: "Đang bán",
-    featured: true,
-    views: 2341,
-    postedBy: "Công ty BĐS XYZ",
-    postedDate: "1 ngày trước",
-    verified: true,
-  },
-  {
-    id: 4,
-    title: "Căn Hộ The Sun Avenue - Giá Tốt Quận Bình Thạnh",
-    type: "Căn Hộ",
-    price: 3800000000,
-    area: 65,
-    bedrooms: 2,
-    bathrooms: 1,
-    location: "Bình Thạnh, TP.HCM",
-    address: "28 Mai Chí Thọ",
-    image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=80",
-    status: "Đang bán",
-    featured: false,
-    views: 678,
-    postedBy: "Trần Thị B",
-    postedDate: "3 ngày trước",
-    verified: false,
-  },
-  {
-    id: 5,
-    title: "Đất Nền Nhà Bè - Tiềm Năng Sinh Lời Cao",
-    type: "Đất Nền",
-    price: 4500000000,
-    area: 100,
-    bedrooms: 0,
-    bathrooms: 0,
-    location: "Nhà Bè, TP.HCM",
-    address: "Đường Nguyễn Bình",
-    image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&q=80",
-    status: "Đang bán",
-    featured: false,
-    views: 445,
-    postedBy: "Lê Văn C",
-    postedDate: "1 tuần trước",
-    verified: true,
-  },
-  {
-    id: 6,
-    title: "Căn Hộ Masteri Thảo Điền - Full Nội Thất Cao Cấp",
-    type: "Căn Hộ",
-    price: 6800000000,
-    area: 90,
-    bedrooms: 3,
-    bathrooms: 2,
-    location: "Quận 2, TP.HCM",
-    address: "159 Xa lộ Hà Nội",
-    image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80",
-    status: "Đang bán",
-    featured: true,
-    views: 1567,
-    postedBy: "Công ty BĐS DEF",
-    postedDate: "4 ngày trước",
-    verified: true,
-  },
-];
+import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
+import { ROLES } from "../constants/roles";
+import { propertyService, Property } from "../services/property.service";
 
 export function PropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savedPropertyIds, setSavedPropertyIds] = useState<Set<number>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+
+  // Sort
+  const [sortBy, setSortBy] = useState("newest");
+
+  // Filters
+  const [filters, setFilters] = useState({
+    district: "",
+    property_type: "",
+    min_price: "",
+    max_price: "",
+    min_area: "",
+    max_area: "",
+    bedrooms: "",
+  });
+  
+  const { user } = useAuth();
+
+  useEffect(() => {
+    loadApprovedProperties();
+  }, [currentPage, filters, sortBy]);
+
+  useEffect(() => {
+    loadSavedPropertyIds();
+  }, []);
+
+  const loadApprovedProperties = async () => {
+    try {
+      setLoading(true);
+      const result = await propertyService.searchProperties({
+        search: searchQuery || undefined,
+        district: filters.district || undefined,
+        property_type: filters.property_type || undefined,
+        min_price: filters.min_price ? parseInt(filters.min_price) : undefined,
+        max_price: filters.max_price ? parseInt(filters.max_price) : undefined,
+        min_area: filters.min_area ? parseFloat(filters.min_area) : undefined,
+        max_area: filters.max_area ? parseFloat(filters.max_area) : undefined,
+        bedrooms: filters.bedrooms ? parseInt(filters.bedrooms) : undefined,
+        page: currentPage,
+        limit: 12,
+        sort_by: sortBy,
+      });
+      setProperties(result.properties || []);
+      setTotalItems(result.total || 0);
+      setTotalPages(Math.ceil((result.total || 0) / 12));
+    } catch (error) {
+      console.error("Error loading properties:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
+    setCurrentPage(1);
+    loadApprovedProperties();
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      district: "",
+      property_type: "",
+      min_price: "",
+      max_price: "",
+      min_area: "",
+      max_area: "",
+      bedrooms: "",
+    });
+    setSearchQuery("");
+    setCurrentPage(1);
+  };
+
+  const loadSavedPropertyIds = async () => {
+    if (!user) return;
+    try {
+      const saved = await propertyService.getSavedProperties();
+      if (Array.isArray(saved)) {
+        setSavedPropertyIds(new Set(saved.map((p: Property) => p.id)));
+      }
+    } catch (error) {
+      // Silent fail for saved properties - user may not be logged in
+    }
+  };
+
+  const handleToggleSave = async (propertyId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      toast.error("Vui lòng đăng nhập để lưu BĐS");
+      return;
+    }
+
+    try {
+      if (savedPropertyIds.has(propertyId)) {
+        await propertyService.removeSavedProperty(propertyId);
+        setSavedPropertyIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(propertyId);
+          return newSet;
+        });
+        toast.success("Đã xóa khỏi danh sách đã lưu");
+      } else {
+        await propertyService.saveProperty(propertyId);
+        setSavedPropertyIds(prev => new Set(prev).add(propertyId));
+        toast.success("Đã lưu BĐS");
+      }
+    } catch (error) {
+      toast.error("Lỗi khi lưu BĐS");
+    }
+  };
+
+  const formatPrice = (price: number) => {
+    if (price >= 1000000000) {
+      return `${(price / 1000000000).toFixed(1)} tỷ`;
+    }
+    return `${(price / 1000000).toFixed(0)} triệu`;
+  };
+
+  const getPropertyTypeName = (type: string) => {
+    const typeMap: Record<string, string> = {
+      apartment: "Căn Hộ",
+      house: "Nhà Phố",
+      villa: "Biệt Thự",
+      townhouse: "Nhà Liền Kề",
+      land: "Đất Nền",
+    };
+    return typeMap[type] || type;
+  };
+
+  const getLocation = (p: Property) => {
+    const parts = [p.district, p.city].filter(Boolean);
+    return parts.length > 0 ? parts.join(", ") : "Không có địa chỉ";
+  };
+
+  const getImages = (p: Property): string[] => {
+    if (Array.isArray(p.images)) return p.images;
+    if (typeof p.images === "string") {
+      try { return JSON.parse(p.images); } catch { return []; }
+    }
+    return [];
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
@@ -158,16 +201,6 @@ export function PropertiesPage() {
                 Phân Tích Thị Trường
               </Button>
             </Link>
-            <Link to="/calculator">
-              <Button variant="outline" size="sm">
-                Công Cụ Tính Toán
-              </Button>
-            </Link>
-            <Link to="/admin/add-property">
-              <Button className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]">
-                Đăng Tin
-              </Button>
-            </Link>
           </div>
         </div>
       </nav>
@@ -179,7 +212,7 @@ export function PropertiesPage() {
             Tìm Bất Động Sản Mơ Ước
           </h1>
           <p className="text-white/80 mb-6">
-            Hơn {mockProperties.length} bất động sản đang chờ bạn khám phá
+            Hơn {properties.length} bất động sản đang chờ bạn khám phá
           </p>
 
           {/* Search Bar */}
@@ -193,13 +226,14 @@ export function PropertiesPage() {
                     className="pl-10"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                   />
                 </div>
               </div>
 
-              <Select defaultValue="all">
+              <Select value={filters.property_type} onValueChange={(value) => handleFilterChange("property_type", value)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Loại BĐS" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất Cả Loại</SelectItem>
@@ -210,7 +244,7 @@ export function PropertiesPage() {
                 </SelectContent>
               </Select>
 
-              <Button className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]">
+              <Button className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]" onClick={handleSearch}>
                 <Search className="w-4 h-4 mr-2" />
                 Tìm Kiếm
               </Button>
@@ -231,29 +265,66 @@ export function PropertiesPage() {
                   <ChevronDown className="w-4 h-4 ml-2" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuContent align="start" className="w-72">
                 <div className="p-4 space-y-4">
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Khoảng Giá</label>
+                    <label className="text-sm font-medium mb-2 block">Quận/Huyện</label>
+                    <Select value={filters.district} onValueChange={(value) => handleFilterChange("district", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn quận" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả</SelectItem>
+                        <SelectItem value="Quận 1">Quận 1</SelectItem>
+                        <SelectItem value="Quận 3">Quận 3</SelectItem>
+                        <SelectItem value="Quận 7">Quận 7</SelectItem>
+                        <SelectItem value="Quận Bình Thạnh">Quận Bình Thạnh</SelectItem>
+                        <SelectItem value="Quận Tân Bình">Quận Tân Bình</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Khoảng Giá (VND)</label>
                     <div className="grid grid-cols-2 gap-2">
-                      <Input placeholder="Từ" type="number" />
-                      <Input placeholder="Đến" type="number" />
+                      <Input 
+                        placeholder="Từ" 
+                        type="number" 
+                        value={filters.min_price}
+                        onChange={(e) => setFilters(prev => ({ ...prev, min_price: e.target.value }))}
+                      />
+                      <Input 
+                        placeholder="Đến" 
+                        type="number" 
+                        value={filters.max_price}
+                        onChange={(e) => setFilters(prev => ({ ...prev, max_price: e.target.value }))}
+                      />
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Diện Tích</label>
+                    <label className="text-sm font-medium mb-2 block">Diện Tích (m²)</label>
                     <div className="grid grid-cols-2 gap-2">
-                      <Input placeholder="Từ" type="number" />
-                      <Input placeholder="Đến" type="number" />
+                      <Input 
+                        placeholder="Từ" 
+                        type="number" 
+                        value={filters.min_area}
+                        onChange={(e) => setFilters(prev => ({ ...prev, min_area: e.target.value }))}
+                      />
+                      <Input 
+                        placeholder="Đến" 
+                        type="number" 
+                        value={filters.max_area}
+                        onChange={(e) => setFilters(prev => ({ ...prev, max_area: e.target.value }))}
+                      />
                     </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">Số Phòng Ngủ</label>
-                    <Select>
+                    <Select value={filters.bedrooms} onValueChange={(value) => handleFilterChange("bedrooms", value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Chọn" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="all">Tất cả</SelectItem>
                         <SelectItem value="1">1+</SelectItem>
                         <SelectItem value="2">2+</SelectItem>
                         <SelectItem value="3">3+</SelectItem>
@@ -261,7 +332,10 @@ export function PropertiesPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button className="w-full">Áp Dụng</Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={clearFilters}>Xóa Lọc</Button>
+                    <Button className="flex-1 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]" onClick={handleSearch}>Áp Dụng</Button>
+                  </div>
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -275,16 +349,16 @@ export function PropertiesPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem>Mới Nhất</DropdownMenuItem>
-                <DropdownMenuItem>Giá Thấp - Cao</DropdownMenuItem>
-                <DropdownMenuItem>Giá Cao - Thấp</DropdownMenuItem>
-                <DropdownMenuItem>Diện Tích Lớn Nhất</DropdownMenuItem>
-                <DropdownMenuItem>Xem Nhiều Nhất</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setSortBy("newest"); setCurrentPage(1); }}>Mới Nhất</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setSortBy("price_asc"); setCurrentPage(1); }}>Giá Thấp - Cao</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setSortBy("price_desc"); setCurrentPage(1); }}>Giá Cao - Thấp</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setSortBy("area_desc"); setCurrentPage(1); }}>Diện Tích Lớn Nhất</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setSortBy("views"); setCurrentPage(1); }}>Xem Nhiều Nhất</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
             <Badge variant="secondary" className="px-4 py-2">
-              {mockProperties.length} kết quả
+              {totalItems} kết quả
             </Badge>
           </div>
 
@@ -307,9 +381,16 @@ export function PropertiesPage() {
         </div>
 
         {/* Properties Grid/List */}
-        {viewMode === "grid" ? (
+        {loading ? (
+          <div className="text-center py-12 text-foreground/70">Đang tải...</div>
+        ) : properties.length === 0 ? (
+          <div className="text-center py-12 text-foreground/70">Không có bất động sản nào được duyệt</div>
+        ) : viewMode === "grid" ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {mockProperties.map((property, index) => (
+            {properties.map((property, index) => {
+              const images = getImages(property);
+              const imageUrl = images.length > 0 ? images[0] : "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80";
+              return (
               <motion.div
                 key={property.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -321,22 +402,17 @@ export function PropertiesPage() {
                     {/* Image */}
                     <div className="relative aspect-[4/3] overflow-hidden">
                       <img
-                        src={property.image}
+                        src={imageUrl}
                         alt={property.title}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
-                      {property.featured && (
-                        <Badge className="absolute top-3 left-3 bg-gradient-to-r from-orange-500 to-red-500 border-0">
-                          <Star className="w-3 h-3 mr-1" />
-                          Nổi Bật
-                        </Badge>
-                      )}
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute top-3 right-3 bg-white/90 hover:bg-white"
+                        className={`absolute top-3 right-3 bg-white/90 hover:bg-white ${savedPropertyIds.has(property.id) ? "text-red-500" : ""}`}
+                        onClick={(e) => handleToggleSave(property.id, e)}
                       >
-                        <Heart className="w-4 h-4" />
+                        <Heart className={`w-4 h-4 ${savedPropertyIds.has(property.id) ? "fill-current" : ""}`} />
                       </Button>
                       <Badge variant="secondary" className="absolute bottom-3 left-3">
                         {property.status}
@@ -347,7 +423,7 @@ export function PropertiesPage() {
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-3">
                         <Badge variant="outline" className="text-xs">
-                          {property.type}
+                          {getPropertyTypeName(property.property_type)}
                         </Badge>
                         {property.verified && (
                           <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-200">
@@ -362,7 +438,7 @@ export function PropertiesPage() {
 
                       <div className="flex items-center gap-1 text-sm text-foreground/70 mb-3">
                         <MapPin className="w-4 h-4" />
-                        <span className="line-clamp-1">{property.location}</span>
+                        <span className="line-clamp-1">{getLocation(property)}</span>
                       </div>
 
                       <div className="flex items-center gap-4 mb-4 pb-4 border-b border-border">
@@ -387,45 +463,26 @@ export function PropertiesPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-2xl font-bold text-foreground">
-                            {(property.price / 1000000000).toFixed(1)} tỷ
+                            {formatPrice(property.price)}
                           </div>
                           <div className="text-xs text-foreground/60">
                             ≈ {(property.price / property.area / 1000000).toFixed(1)} tr/m²
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 text-sm text-foreground/60">
-                          <Eye className="w-4 h-4" />
-                          {property.views}
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center text-white text-xs font-bold">
-                            {property.postedBy.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="text-xs font-medium text-foreground">
-                              {property.postedBy}
-                            </div>
-                            <div className="text-xs text-foreground/60">
-                              {property.postedDate}
-                            </div>
-                          </div>
-                        </div>
-                        <Button size="sm" variant="outline">
-                          <Phone className="w-4 h-4" />
-                        </Button>
                       </div>
                     </div>
                   </Card>
                 </Link>
               </motion.div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="space-y-4">
-            {mockProperties.map((property, index) => (
+            {properties.map((property, index) => {
+              const images = getImages(property);
+              const imageUrl = images.length > 0 ? images[0] : "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80";
+              return (
               <motion.div
                 key={property.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -438,23 +495,17 @@ export function PropertiesPage() {
                       {/* Image */}
                       <div className="relative w-80 h-56 flex-shrink-0 overflow-hidden rounded-lg">
                         <img
-                          src={property.image}
+                          src={imageUrl}
                           alt={property.title}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                         />
-                        {property.featured && (
-                          <Badge className="absolute top-3 left-3 bg-gradient-to-r from-orange-500 to-red-500 border-0">
-                            <Star className="w-3 h-3 mr-1" />
-                            Nổi Bật
-                          </Badge>
-                        )}
                       </div>
 
                       {/* Content */}
                       <div className="flex-1 flex flex-col">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline">{property.type}</Badge>
+                            <Badge variant="outline">{getPropertyTypeName(property.property_type)}</Badge>
                             {property.verified && (
                               <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
                                 ✓ Đã Xác Minh
@@ -462,8 +513,13 @@ export function PropertiesPage() {
                             )}
                             <Badge variant="secondary">{property.status}</Badge>
                           </div>
-                          <Button variant="ghost" size="icon">
-                            <Heart className="w-4 h-4" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={savedPropertyIds.has(property.id) ? "text-red-500" : ""}
+                            onClick={(e) => handleToggleSave(property.id, e)}
+                          >
+                            <Heart className={`w-4 h-4 ${savedPropertyIds.has(property.id) ? "fill-current" : ""}`} />
                           </Button>
                         </div>
 
@@ -473,7 +529,7 @@ export function PropertiesPage() {
 
                         <div className="flex items-center gap-2 text-foreground/70 mb-4">
                           <MapPin className="w-4 h-4" />
-                          <span>{property.address}</span>
+                          <span>{property.address}, {property.district}</span>
                         </div>
 
                         <div className="flex items-center gap-6 mb-4">
@@ -498,35 +554,17 @@ export function PropertiesPage() {
                         <div className="mt-auto flex items-center justify-between">
                           <div>
                             <div className="text-3xl font-bold text-foreground mb-1">
-                              {(property.price / 1000000000).toFixed(1)} tỷ VND
+                              {formatPrice(property.price)}
                             </div>
                             <div className="text-sm text-foreground/60">
                               ≈ {(property.price / property.area / 1000000).toFixed(1)} triệu/m²
                             </div>
                           </div>
                           <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1 text-sm text-foreground/60">
-                              <Eye className="w-4 h-4" />
-                              {property.views} lượt xem
-                            </div>
                             <Button className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]">
                               <Phone className="w-4 h-4 mr-2" />
                               Liên Hệ
                             </Button>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center text-white font-bold">
-                            {property.postedBy.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-foreground">
-                              {property.postedBy}
-                            </div>
-                            <div className="text-xs text-foreground/60">
-                              Đăng {property.postedDate}
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -534,27 +572,47 @@ export function PropertiesPage() {
                   </Card>
                 </Link>
               </motion.div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {/* Pagination */}
         <div className="mt-12 flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+          >
             Trước
           </Button>
-          {[1, 2, 3, 4, 5].map((page) => (
-            <Button
-              key={page}
-              variant={page === 1 ? "default" : "outline"}
-              size="sm"
-            >
-              {page}
-            </Button>
-          ))}
-          <Button variant="outline" size="sm">
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            const page = i + 1;
+            return (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(page)}
+                className={currentPage === page ? "bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6]" : ""}
+              >
+                {page}
+              </Button>
+            );
+          })}
+          <Button 
+            variant="outline" 
+            size="sm"
+            disabled={currentPage === totalPages || totalPages === 0}
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+          >
             Sau
           </Button>
+        </div>
+        
+        <div className="text-center text-sm text-foreground/60 mt-2">
+          Hiển thị {(currentPage - 1) * 12 + 1} - {Math.min(currentPage * 12, totalItems)} trong tổng số {totalItems} tin đăng
         </div>
       </main>
 
@@ -580,7 +638,6 @@ export function PropertiesPage() {
                 <li><Link to="/properties" className="hover:text-white transition-colors">Mua Bán BĐS</Link></li>
                 <li><Link to="/dashboard" className="hover:text-white transition-colors">Dự Đoán AI</Link></li>
                 <li><Link to="/market-analysis" className="hover:text-white transition-colors">Phân Tích Thị Trường</Link></li>
-                <li><Link to="/calculator" className="hover:text-white transition-colors">Công Cụ Tính Toán</Link></li>
               </ul>
             </div>
 
